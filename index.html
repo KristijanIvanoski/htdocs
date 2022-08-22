@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Document</title>
+    </head>
+
+    <style>
+        body {
+            background-color: rgb(30, 31, 42);
+            color: white;
+            font-family: "Courier New", monospace;
+        }
+
+        .f {
+            display: flex;
+            gap: 10px;
+            align-items: baseline;
+
+            padding: 5px;
+            border: 1px solid cyan;
+            margin-bottom: 10px;
+        }
+
+        .f > input {
+            flex: 1;
+            padding: 5px;
+            background-color: rgba(17, 251, 251, 0.01);
+            color: cyan;
+            font-family: "Courier New", monospace;
+        }
+
+        .f > input::placeholder {
+            /* Chrome, Firefox, Opera, Safari 10.1+ */
+            color: cyan;
+            opacity: 0.5;
+            /* Firefox */
+        }
+
+        .f > input :-ms-input-placeholder {
+            /* Internet Explorer 10-11 */
+            color: cyan;
+        }
+
+        .f > input::-ms-input-placeholder {
+            /* Microsoft Edge */
+            color: cyan;
+        }
+
+        .f > label {
+            min-width: 140px;
+        }
+
+        button {
+            width: 100%;
+            padding: 5px;
+            color: rgba(17, 251, 251, 1);
+            background-color: transparent;
+            border: 1px solid rgba(17, 251, 251, 1);
+            cursor: pointer;
+        }
+
+        button.isLoading {
+            cursor: wait;
+            color: grey;
+        }
+
+        #ListOfFoundItems:has(h2) {
+            margin-top: 25px;
+            border: 1px solid grey;
+        }
+
+        #ListOfFoundItems > div {
+            padding: 10px;
+            border: 1px solid cyan;
+            margin-bottom: 10px;
+            min-height: 32px;
+        }
+
+        #ListOfFoundItems > div > div {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #ListOfFoundItems > div > div:last-child {
+            display: flex;
+            gap: 10px;
+        }
+
+				a {
+					color:rgba(17, 251, 251, 1);
+				}
+    </style>
+
+    <body>
+        <form onsubmit="askApi(event)">
+            <div class="f">
+                <label for="mailSrv">Email domain</label>
+                <input
+                    type="text"
+                    id="mailSrv"
+                    placeholder="mail.ivanoski.tech"
+                    value=""
+                />
+            </div>
+
+            <div class="f">
+                <label for="mailUser">Email user</label>
+                <input
+                    type="text"
+                    id="mailUser"
+                    placeholder="user@email.com"
+                    value=""
+                />
+            </div>
+
+            <div class="f">
+                <label for="mailPass">Email password</label>
+                <input
+                    type="password"
+                    id="mailPass"
+                    placeholder=""
+                    value=""
+                />
+            </div>
+
+            <div class="f">
+                <label for="subjectFilter">Subject filter</label>
+                <input
+                    type="text"
+                    id="subjectFilter"
+                    placeholder='FROM "user@email.com" SUBJECT "test"'
+                    value=''
+                />
+            </div>
+            <button type="submit" id="sButton">send it</button>
+        </form>
+
+        <div id="ListOfFoundItems"></div>
+
+        <script>
+            const askApiButton = document.querySelector("#sButton");
+
+            const switchButton = (isLoading = false) => {
+                if (isLoading) {
+                    askApiButton.setAttribute("disabled", "true");
+                    askApiButton.classList.add("isLoading");
+                }
+
+                if (!isLoading) {
+                    askApiButton.removeAttribute("disabled");
+                    askApiButton.classList.remove("isLoading");
+                }
+            };
+
+            const askApi = async (e) => {
+                e.preventDefault();
+
+                switchButton(true);
+
+                document.getElementById("ListOfFoundItems").innerHTML = "";
+
+                let vars = {};
+                document
+                    .querySelector("form")
+                    .querySelectorAll("input")
+                    .forEach((input) => {
+                        vars[input.id] = input.value;
+                    });
+
+                let url = "/api/attachments?";
+
+                Object.entries(vars).forEach((entry) => {
+                    url += `${entry[0]}=${entry[1]}&`;
+                });
+
+                fetch(url)
+                    .then((r) => r.text())
+                    .then((r) => {
+                        switchButton(false);
+                        populateList(r);
+                    })
+                    .catch((e) => alert(e));
+            };
+
+            const populateList = (r) => {
+                if (!r.includes("[")) {
+                    alert("Found 0 xlsx files");
+                }
+
+                const a = r.replace("[", "").replace("]", "").split(",");
+
+                const ol = document.querySelector("#ListOfFoundItems");
+
+                ol.innerHTML = "";
+
+                a.forEach((obj) => {
+                    if (obj) {
+                        ol.insertAdjacentHTML("beforeend", createActionsForFile(obj));
+                    }
+                });
+
+                ol.insertAdjacentHTML("afterBegin", "<h3>(format: emailId-x-NameOfFile) List of found files: </h3>");
+            };
+
+            const createActionsForFile = (fileName) => {
+                const _fileName = fileName.replaceAll('"', "");
+                return `
+            	<div>
+            		<div>
+            			<div>${_fileName}</div>
+            				<div data-file="${_fileName}">
+            					<button onClick="convertFile('${_fileName}')">Convert</button>
+            			</div>
+            		</div>
+            	</div>
+            	`;
+            };
+
+            const convertFile = async (fileName) => {
+                root = document.querySelector(`[data-file="${fileName}"]`);
+                root.innerHTML = "";
+
+                fetch(`/api/convert?fileName=${fileName}`)
+                    .then((r) => r.text())
+                    .then((r) => {
+                        if (r == "Converted") {
+                            root.insertAdjacentHTML(
+                                "beforeend",
+                                `<a href="/attachment/${fileName.split('.').slice(0, fileName.split('.').length-1)}.xls">Download</a>`
+                            );
+                        } else {
+                            alert("file named: " + fileName + " not converted");
+                        }
+                    })
+                    .catch((e) => alert(e));
+            };
+        </script>
+    </body>
+</html>
